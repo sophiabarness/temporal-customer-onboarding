@@ -6,7 +6,10 @@ A Temporal application modeling a merchant onboarding compliance process. When a
 
 ## Overview
 
+<img src="docs/onboarding-workflow.png" alt="Customer onboarding flow">
 <img src="docs/overview.png" alt="Onboarding workflow diagram" width="600">
+
+
 
 **Timeline:**
 - **Day 0** — Workflow starts when the merchant's first payment is received
