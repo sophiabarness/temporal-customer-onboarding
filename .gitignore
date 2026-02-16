@@ -1,2 +1,12 @@
-temporal-ecommerce/
-background-checks/
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Go build output
+/bin/
