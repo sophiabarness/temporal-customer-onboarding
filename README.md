@@ -16,16 +16,17 @@ A Temporal application modeling a merchant onboarding compliance process. When a
 
 If the merchant submits their document at any point, the reminders stop and KYC verification begins via a child workflow.
 
-## Temporal Features Demonstrated
+## How Temporal Solves Challenges
 
-| Feature | Where | Why |
+| Challenge | Temporal Feature | Impact |
 |---|---|---|
-| **Durable Timers** | Day 30/60 reminders | Survive server restarts across 30+ day spans |
-| **Signals** | `SignalDocumentSubmitted` | External event (merchant submits KYC document) enters a running workflow |
-| **Queries** | `QueryOnboardingStatus` | Real-time status check without a database |
-| **Child Workflows** | Identity Verification | Own retry policy, event history, and lifecycle |
-| **AwaitWithTimeout** | 90-day deadline | Wakes immediately on signal OR expires at deadline |
-| **Non-Retryable Errors** | Supplier rejection | Distinguishes transient failures (retry) from business rejections (fail fast) |
+| Long-running state across 90 days | **Durable Timers** | No cron jobs, no polling — timers survive crashes and restarts |
+| Unreliable third-party KYC APIs | **Activity Retries & Timeouts** | Automatic retry with backoff; clean separation from business logic |
+| Waiting for async user input | **Signals** (`SignalDocumentSubmitted`) | Workflow sleeps until event arrives — no polling, no message queues |
+| Race conditions (signal vs. timer) | **Selectors** | Timers and signals race cleanly; no distributed locks needed |
+| Querying workflow state | **Queries** (`QueryOnboardingStatus`) | Real-time status without an external database |
+| Isolating failure domains | **Child Workflows** | KYC verification has its own retry policy and lifecycle |
+| Business vs. infrastructure errors | **Non-Retryable Errors** | Supplier rejections fail fast; transient errors retry automatically |
 
 ## Project Structure
 
