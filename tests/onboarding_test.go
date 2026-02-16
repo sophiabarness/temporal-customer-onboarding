@@ -22,7 +22,6 @@ func defaultOnboardingRequest() shared.OnboardingRequest {
 			Country:      "NL",
 			BusinessType: "ecommerce",
 		},
-		FirstPaymentDate: time.Now(),
 	}
 }
 

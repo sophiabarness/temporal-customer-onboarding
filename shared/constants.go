@@ -11,7 +11,6 @@ const (
 // Signal and query names.
 const (
 	SignalDocumentSubmitted = "signal-document-submitted"
-	SignalDocumentUploaded  = "signal-document-uploaded"
 	QueryOnboardingStatus   = "query-onboarding-status"
 )
 

@@ -1,7 +1,5 @@
 package shared
 
-import "time"
-
 // OnboardingStatus represents the current state of merchant onboarding.
 type OnboardingStatus string
 
@@ -31,8 +29,7 @@ type MerchantInfo struct {
 
 // OnboardingRequest is the input to the OnboardingWorkflow.
 type OnboardingRequest struct {
-	Merchant         MerchantInfo `json:"merchant"`
-	FirstPaymentDate time.Time    `json:"firstPaymentDate"`
+	Merchant MerchantInfo `json:"merchant"`
 }
 
 // ReminderRequest is the input to the SendReminder activity.

@@ -22,7 +22,7 @@ If the merchant submits their document at any point, the reminders stop and KYC 
 |---|---|---|
 | **Durable Timers** | Day 30/60 reminders | Survive server restarts across 30+ day spans |
 | **Signals** | `SignalDocumentSubmitted` | External event (merchant submits KYC document) enters a running workflow |
-| **Queries** | `GetOnboardingStatus` | Real-time status check without a database |
+| **Queries** | `QueryOnboardingStatus` | Real-time status check without a database |
 | **Child Workflows** | Identity Verification | Own retry policy, event history, and lifecycle |
 | **AwaitWithTimeout** | 90-day deadline | Wakes immediately on signal OR expires at deadline |
 | **Non-Retryable Errors** | Supplier rejection | Distinguishes transient failures (retry) from business rejections (fail fast) |
@@ -44,13 +44,13 @@ If the merchant submits their document at any point, the reminders stop and KYC 
 │   └── activity/        # Activity worker
 ├── starter/             # Interactive CLI
 ├── shared/              # Models, constants, task queues
-└── tests/               # 10 unit tests with mocked activities
+└── tests/               # 11 unit tests with mocked activities
 ```
 
 ## Design Decisions & Best Practices
 
 - **Workflow ID as idempotency key** — `onboard-merchant-{id}` uses a meaningful business identifier to prevent duplicate onboarding for the same merchant.
-- **Child workflow for KYC** — Keeps the parent's event history small (50K event limit), has its own timeout, and can be reused for periodic re-verification.
+- **Child workflow for KYC** — Isolates verification with its own retry policy and timeout. Can be reused for annual re-verification without duplicating logic.
 - **Business outcomes as return values** — KYC rejection returns `VerificationResult{Passed: false}`, not a workflow error. `NonRetryableApplicationError` is used to distinguish business rejections from transient failures.
 - **Signals for external events** — Signals deliver data into a running workflow without polling a database or queue.
 - **Queries for state, not a database** — Workflow state is already durable. Expose it via query handlers instead of writing to an external store.
@@ -84,7 +84,7 @@ go run ./starter/main.go
 **Demo paths:**
 - Submit a **numeric** document → KYC passes → `APPROVED`
 - Submit a **non-numeric** document → supplier rejects → `KYC-REJECTED`
-- Don't submit → reminders fire → `PAYMENTS-DISABLED` (requires short timer config)
+- Don't submit → reminders fire at Day 30/60 → deadline expires → `PAYMENTS-DISABLED`
 
 ### Test
 ```bash
