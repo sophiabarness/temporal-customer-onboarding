@@ -22,6 +22,8 @@ func main() {
 	defer c.Close()
 
 	merchantID := "MERCH-001"
+	// Business-meaningful workflow ID acts as an idempotency key: prevents
+	// duplicate onboarding for the same merchant while a workflow is running.
 	workflowID := fmt.Sprintf("onboard-merchant-%s", merchantID)
 	reader := bufio.NewReader(os.Stdin)
 
@@ -38,6 +40,8 @@ func main() {
 	fmt.Println()
 	fmt.Println("🚀 Starting onboarding workflow for merchant", merchantID)
 
+	// To also reject re-onboarding after completion, add WorkflowIDReusePolicy:
+	//   enums.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE
 	we, err := c.ExecuteWorkflow(
 		context.Background(),
 		client.StartWorkflowOptions{

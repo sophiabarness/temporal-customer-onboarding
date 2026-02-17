@@ -19,6 +19,24 @@ A Temporal application modeling a merchant onboarding compliance process. When a
 
 If the merchant submits their document at any point, the reminders stop and KYC verification begins via a child workflow.
 
+## Business Value: Why Temporal?
+
+### The "Before" State: Complexity & Pain Points
+
+Without Temporal, building this long-running 90-day compliance flow would require a complex "State Machine via Polling" architecture involving multiple cron jobs and database fields.
+
+1.  **State Machine via Polling**:
+    *   **Cron A (Reminders)**: Polls every hour: `SELECT * FROM merchants WHERE created_at < NOW() - 30_DAYS AND reminder_sent = false`.
+    *   **Cron B (Deadline)**: Polls every hour: `SELECT * FROM merchants WHERE created_at < NOW() - 90_DAYS AND payments_enabled = true`.
+    *   **API (Submission)**: Updates DB state. Requires a distributed lock to prevent race conditions with Cron B (e.g., user submits document at the exact second the deadline hits).
+
+2.  **Pain Points**:
+    *   **Race Conditions**: A user uploads a document at Day 89 23:59. Cron B runs at Day 90 00:00. Without complex locking, the account might be disabled remotely *after* the document was received.
+    *   **Visibility Black Holes**: To debug why a merchant was disabled, you'd have to grep logs across 3 different systems (API, Reminder Cron, Deadline Cron).
+    *   **Rigid Retries**: Standard queues often have hardcoded retry limits. Temporal offers ully customizable Retry Policies: you can configure infinite retries for downtime, or fail instantly for business errors (like invalid config), all defined as code.
+    *   **Boilerplate**: You write 80% infrastructure code (crons, locks, queue consumers) and 20% business logic.
+
+
 ## How Temporal Solves Challenges
 
 | Challenge | Temporal Feature | Impact |
@@ -89,6 +107,12 @@ go run ./starter/main.go
 - Submit a **numeric** document → KYC passes → `APPROVED`
 - Submit a **non-numeric** document → supplier rejects → `KYC-REJECTED`
 - Don't submit → reminders fire at Day 30/60 → deadline expires → `PAYMENTS-DISABLED`
+- **Fault Tolerance**:
+    1.  Start the workflow: `go run ./starter`
+    2.  Simulate a crash: Kill the `go run ./workers/activity` process during execution.
+    3.  Submit a document. The workflow will wait for an activity worker without losing state.
+    4.  Restart the worker. The workflow resumes immediately.
+    5.  **Chaos Testing**: Submit any numeric document ID (e.g., `12345`). The activity has a built-in **75% failure rate** to simulate a generalized outage. Watch the Temporal Web UI to see automatic retries in action.
 
 ### Test
 ```bash

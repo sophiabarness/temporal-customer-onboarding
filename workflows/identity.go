@@ -12,7 +12,7 @@ import (
 
 // IdentityVerificationWorkflow is a child workflow that orchestrates KYC verification.
 // It validates a merchant's identity document with a 3rd party supplier,
-// then runs internal verifications (identity check + sanctions screening).
+// then runs internal identity verification.
 func IdentityVerificationWorkflow(ctx workflow.Context, merchantID string, documentID string) (shared.VerificationResult, error) {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Identity verification workflow started",
@@ -29,7 +29,6 @@ func IdentityVerificationWorkflow(ctx workflow.Context, merchantID string, docum
 			InitialInterval:        time.Second,
 			BackoffCoefficient:     2.0,
 			MaximumInterval:        30 * time.Second,
-			MaximumAttempts:        3,
 			NonRetryableErrorTypes: []string{shared.ErrTypeIdentityVerificationFailed},
 		},
 	}
@@ -64,7 +63,7 @@ func IdentityVerificationWorkflow(ctx workflow.Context, merchantID string, docum
 	}
 	logger.Info("Supplier validation passed", "verificationId", supplierResult.VerificationID)
 
-	// Step 2: Perform internal verifications (identity + sanctions).
+	// Step 2: Perform internal identity verification.
 	var internalResult shared.VerificationResult
 	internalCtx := workflow.WithActivityOptions(ctx, internalOpts)
 	err = workflow.ExecuteActivity(internalCtx, a.PerformInternalVerifications, merchantID).Get(ctx, &internalResult)

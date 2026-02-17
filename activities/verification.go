@@ -3,6 +3,7 @@ package activities
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"unicode"
 
 	"go.temporal.io/sdk/activity"
@@ -13,6 +14,7 @@ import (
 
 // ValidateWithSupplier sends the merchant's identity document to a
 // third-party verification supplier (e.g., Onfido, Jumio) and returns the result.
+// Idempotency: naturally idempotent — validation is a read operation with no side effects.
 func (a *Activities) ValidateWithSupplier(ctx context.Context, doc shared.DocumentUpload) (shared.VerificationResult, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Sending document to verification supplier",
@@ -21,6 +23,8 @@ func (a *Activities) ValidateWithSupplier(ctx context.Context, doc shared.Docume
 		"documentId", doc.DocumentID,
 	)
 
+	// Validate: document ID must contain only digits.
+	// In production, the supplier would perform this validation.
 	// Validate: document ID must contain only digits.
 	// In production, the supplier would perform this validation.
 	for _, ch := range doc.DocumentID {
@@ -41,6 +45,21 @@ func (a *Activities) ValidateWithSupplier(ctx context.Context, doc shared.Docume
 		}
 	}
 
+	// -------------------------------------------------------------------------
+	// DEMO: Simulating a flaky 3rd party API for the "Fault Tolerance" demo.
+	// If the document ID ends with "99", we simulate a failure.
+	// -------------------------------------------------------------------------
+	// -------------------------------------------------------------------------
+	// DEMO: Simulating a flaky 3rd party API for the "Fault Tolerance" demo.
+	// 75% chance of failure to demonstrate automatic activity retries.
+	// -------------------------------------------------------------------------
+	if rand.Float64() < 0.75 {
+		logger.Error("Simulating 3rd party API downtime (75% chance)",
+			"merchantId", doc.MerchantID,
+		)
+		return shared.VerificationResult{}, fmt.Errorf("simulated 3rd party API failure (transient)")
+	}
+
 	verificationID := fmt.Sprintf("SUP-%s", doc.MerchantID)
 	logger.Info("Supplier verified document successfully", "verificationId", verificationID)
 
@@ -51,28 +70,21 @@ func (a *Activities) ValidateWithSupplier(ctx context.Context, doc shared.Docume
 	}, nil
 }
 
-// PerformInternalVerifications runs Mollie's internal KYC checks:
-//  1. Identity verification — does the verified identity match the merchant account?
-//  2. Sanctions screening — is this person/business on a sanctions list?
+// PerformInternalVerifications runs internal identity verification:
+// checks whether the supplier-verified identity matches the merchant account.
 //
-// In production, additional checks would include: business legitimacy,
-// legal authorization, acceptable business activities, and bank account verification.
+// Idempotency: naturally idempotent — validation is a read operation with no side effects.
 func (a *Activities) PerformInternalVerifications(ctx context.Context, merchantID string) (shared.VerificationResult, error) {
 	logger := activity.GetLogger(ctx)
-	logger.Info("Performing internal verifications", "merchantId", merchantID)
+	logger.Info("Performing internal identity verification", "merchantId", merchantID)
 
-	// Check 1: Identity verification
-	logger.Info("Running identity verification check", "merchantId", merchantID)
-
-	// Check 2: Sanctions screening
-	logger.Info("Running sanctions list screening", "merchantId", merchantID)
-
+	// In production: verify that the supplier-verified identity matches merchant records.
 	verificationID := fmt.Sprintf("INT-%s", merchantID)
-	logger.Info("Internal verifications passed", "verificationId", verificationID)
+	logger.Info("Internal identity verification passed", "verificationId", verificationID)
 
 	return shared.VerificationResult{
 		Passed:         true,
 		VerificationID: verificationID,
-		Details:        "All internal verifications passed (identity + sanctions)",
+		Details:        "Internal identity verification passed",
 	}, nil
 }
