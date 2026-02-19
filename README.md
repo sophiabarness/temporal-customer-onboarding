@@ -19,21 +19,18 @@ A Temporal application modeling a merchant onboarding compliance process. When a
 
 If the merchant submits their document at any point, the reminders stop and KYC verification begins via a child workflow.
 
-## Business Value: Why Temporal?
-
-### The "Before" State: Complexity & Pain Points
-
-Without Temporal, building this long-running 90-day compliance flow would require a complex "State Machine via Polling" architecture involving multiple cron jobs and database fields.
+## Without Temporal
 
 1.  **State Machine via Polling**:
+    *   **Document Upload API Endpoint**: Updates DB state and pushes a verification job to a queue.
+    *   **Queue Consumer (Async KYC)**: Pulls the job and calls the 3rd-party identity provider. If the API is down, it retries N times before failing (Dead Letter Queue).
     *   **Cron A (Reminders)**: Polls every hour: `SELECT * FROM merchants WHERE created_at < NOW() - 30_DAYS AND reminder_sent = false`.
     *   **Cron B (Deadline)**: Polls every hour: `SELECT * FROM merchants WHERE created_at < NOW() - 90_DAYS AND payments_enabled = true`.
-    *   **API (Submission)**: Updates DB state. Requires a distributed lock to prevent race conditions with Cron B (e.g., user submits document at the exact second the deadline hits).
 
 2.  **Pain Points**:
-    *   **Race Conditions**: A user uploads a document at Day 89 23:59. Cron B runs at Day 90 00:00. Without complex locking, the account might be disabled remotely *after* the document was received.
-    *   **Visibility Black Holes**: To debug why a merchant was disabled, you'd have to grep logs across 3 different systems (API, Reminder Cron, Deadline Cron).
-    *   **Rigid Retries**: Standard queues often have hardcoded retry limits. Temporal offers ully customizable Retry Policies: you can configure infinite retries for downtime, or fail instantly for business errors (like invalid config), all defined as code.
+    *   **Race Conditions**: A user uploads a document just seconds before the deadline. The `Document Upload API` starts processing, but the `Deadline Cron` fires at the same moment. The cron disables the user, but the `Document Upload API` then overwrites the status to "Verifying". Result: The user is in a broken state (payments disabled, but UI says verifying).
+    *   **Visibility Problems**: To debug why a merchant was disabled, you'd have to grep logs across 3 different systems (Document Upload, Reminder Cron, Deadline Cron).
+    *   **Rigid Retries**: Standard queues often have hardcoded retry limits. 
     *   **Boilerplate**: You write 80% infrastructure code (crons, locks, queue consumers) and 20% business logic.
 
 
@@ -49,25 +46,6 @@ Without Temporal, building this long-running 90-day compliance flow would requir
 | Isolating failure domains | **Child Workflows** | KYC verification has its own retry policy and lifecycle |
 | Business vs. infrastructure errors | **Non-Retryable Errors** | Supplier rejections fail fast; transient errors retry automatically |
 
-## Project Structure
-
-```
-├── activities/          # Activity methods on Activities struct
-│   ├── activities.go    # Struct definition (DI receiver)
-│   ├── notification.go  # SendReminder
-│   ├── payment.go       # DisablePayments
-│   └── verification.go  # ValidateWithSupplier, PerformInternalVerifications
-├── workflows/
-│   ├── onboarding.go    # Parent: reminders → deadline → KYC (struct-based)
-│   ├── identity.go      # Child: supplier validation → internal checks
-│   └── activities.go    # Package-level activity reference
-├── workers/
-│   ├── onboarding/      # Workflow worker
-│   └── activity/        # Activity worker
-├── starter/             # Interactive CLI
-├── shared/              # Models, constants, task queues
-└── tests/               # 11 unit tests with mocked activities
-```
 
 ## Design Decisions & Best Practices
 
@@ -79,7 +57,6 @@ Without Temporal, building this long-running 90-day compliance flow would requir
 - **Selectors to race timers against signals** — Lets the workflow respond immediately to events instead of waiting for a timer to expire.
 - **Separate workflow and activity workers** — Workflow worker is CPU-light (timers/signals); activity worker is I/O-bound (API calls). Scale independently in production.
 - **Struct-based activities for dependency injection** — Register activities on a struct so dependencies can be injected at startup and swapped in tests.
-- **Logging via `workflow.GetLogger`** — Uses the Temporal SDK logger for determinism-safe, replay-aware logging inside workflows.
 
 ## Getting Started
 
