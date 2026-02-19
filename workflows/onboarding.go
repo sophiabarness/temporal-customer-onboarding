@@ -77,7 +77,7 @@ func (w *onboardingWorkflow) waitForDocumentWithReminders(ctx workflow.Context) 
 		reminderType string
 	}{
 		{shared.ReminderDay30, "day30"},
-		{shared.ReminderDay60, "day60"},
+		{shared.ReminderDay30, "day60"}, // Wait ANOTHER 30 days (Day 60 total)
 	}
 
 	for _, r := range reminders {
@@ -136,13 +136,26 @@ func (w *onboardingWorkflow) waitForDeadline(ctx workflow.Context) {
 		"remainingTime", remainingTime,
 	)
 
-	workflow.AwaitWithTimeout(ctx, remainingTime, func() bool {
-		return w.documentID != ""
+	// Wait for the deadline or the signal.
+	selector := workflow.NewSelector(ctx)
+
+	// Case 1: Deadline expires.
+	timerFuture := workflow.NewTimer(ctx, remainingTime)
+	selector.AddFuture(timerFuture, func(f workflow.Future) {
+		// Do nothing — simply let the selector return.
+		// documentID remains empty.
 	})
 
-	// Drain any pending signal.
-	for w.signalCh.ReceiveAsync(&w.documentID) {
-	}
+	// Case 2: Signal arrives.
+	selector.AddReceive(w.signalCh, func(ch workflow.ReceiveChannel, more bool) {
+		ch.Receive(ctx, &w.documentID)
+		w.logger.Info("Signal received during deadline phase",
+			"merchantId", w.req.Merchant.MerchantID,
+			"documentId", w.documentID,
+		)
+	})
+
+	selector.Select(ctx)
 }
 
 // disablePayments handles the case where the merchant missed the 90-day deadline.
